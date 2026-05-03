@@ -1,200 +1,211 @@
 "use client";
-import { useState } from "react";
-import { WEBHOOK_URLS } from "@/lib/api";
-import { useLicenseKey } from "@/lib/use-license";
+import { useState, useEffect, useCallback } from "react";
+import { api, type PlatformConfig } from "@/lib/api";
+import AuthGate from "@/components/AuthGate";
+import clsx from "clsx";
 
-type PlatformDef = {
-  id:        string;
-  name:      string;
-  color:     string;
-  borderCls: string;
-  badgeCls:  string;
-  saveCls:   string;
-  ringCls:   string;
-};
+const G = { fontFamily: "var(--font-space-grotesk,'Space Grotesk'),sans-serif" };
 
-const PLATFORMS: PlatformDef[] = [
-  {
-    id: "saweria", name: "Saweria",
-    color: "text-primary", borderCls: "gradient-border-saweria",
-    badgeCls: "bg-primary-container/20 text-primary-fixed",
-    saveCls: "from-primary to-primary-container text-on-primary shadow-[0_8px_16px_rgba(30,60,114,0.3)]",
-    ringCls: "focus:ring-primary/40",
-  },
-  {
-    id: "socialbuzz", name: "SocialBuzz",
-    color: "text-secondary", borderCls: "gradient-border-socialbuzz",
-    badgeCls: "bg-secondary-container/20 text-secondary-fixed",
-    saveCls: "from-secondary to-secondary-container text-white shadow-[0_8px_16px_rgba(90,0,198,0.3)]",
-    ringCls: "focus:ring-secondary/40",
-  },
-  {
-    id: "bagibagi", name: "BagiBagi",
-    color: "text-tertiary", borderCls: "gradient-border-bagibagi",
-    badgeCls: "bg-tertiary-container/20 text-tertiary-fixed",
-    saveCls: "from-tertiary to-tertiary-container text-on-tertiary-fixed shadow-[0_8px_16px_rgba(96,50,0,0.3)]",
-    ringCls: "focus:ring-tertiary/40",
-  },
+type Def = { id: string; label: string; accentCls: string; badgeCls: string; activeColor: string; };
+
+const PLATFORMS: Def[] = [
+  { id:"saweria",    label:"Saweria",    accentCls:"border-saweria",    badgeCls:"text-primary-fixed border-primary-fixed/30",  activeColor:"#c8e9ec" },
+  { id:"socialbuzz", label:"SocialBuzz", accentCls:"border-socialbuzz", badgeCls:"text-secondary border-secondary/30",          activeColor:"#ecb2ff" },
+  { id:"bagibagi",   label:"BagiBagi",   accentCls:"border-bagibagi",   badgeCls:"text-tertiary-fixed-dim border-tertiary-fixed/40", activeColor:"#cfc6b0" },
+  { id:"trakteer",   label:"Trakteer",   accentCls:"border-trakteer",   badgeCls:"text-error border-error/30",                  activeColor:"#ffb4ab" },
+  { id:"twitch",     label:"Twitch",     accentCls:"border-twitch",     badgeCls:"text-purple-400 border-purple-400/30",         activeColor:"#bf94ff" },
 ];
 
-function PlatformCard({ p }: { p: PlatformDef }) {
+function ago(iso: string) {
+  const d = Math.floor((Date.now()-new Date(iso).getTime())/1000);
+  return d<60?`${d}s ago`:d<3600?`${Math.floor(d/60)}m ago`:`${Math.floor(d/3600)}h ago`;
+}
+
+function Card({ p, cfg, health, onRefresh }: {
+  p: Def; cfg?: PlatformConfig; health?: any; onRefresh: () => void;
+}) {
+  const [key, setKey]   = useState("");
   const [show, setShow] = useState(false);
-  const [enabled, setEnabled] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
-  const webhookUrl = WEBHOOK_URLS[p.id];
+  const [gen, setGen]   = useState(false);
+  const [save,setSave]  = useState(false);
+  const [tog, setTog]   = useState(false);
+  const [test,setTest]  = useState(false);
+  const [res, setRes]   = useState<"ok"|"fail"|null>(null);
+  const [cpy, setCpy]   = useState(false);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const active = cfg?.is_active ?? false;
+  const url    = cfg?.webhook_url ?? null;
+  const rbx    = cfg?.platform_api_key ?? null;
+
+  const doGen  = async()=>{ setGen(true);  try{await api.platform.generateSecret(p.id);onRefresh();}finally{setGen(false);}  };
+  const doSave = async()=>{ if(!key.trim())return; setSave(true); try{await api.platform.saveApiKey(p.id,key.trim());setKey("");onRefresh();}finally{setSave(false);} };
+  const doTog  = async()=>{ setTog(true);  try{await api.platform.toggle(p.id,!active);onRefresh();}finally{setTog(false);}  };
+  const doTest = async()=>{
+    if(!url)return; setTest(true); setRes(null);
+    try{
+      const pl = p.id==="trakteer"
+        ?{tr_id:"t_"+Math.random().toString(36).slice(2,8),supporter_name:"Test",unit_value:1000,quantity:1}
+        :{donation_id:"t_"+Math.random().toString(36).slice(2,8),donor_name:"Test",amount:1000,currency:"IDR"};
+      const r = await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pl)});
+      setRes(r.ok?"ok":"fail");
+    }catch{setRes("fail");}
+    finally{setTest(false);setTimeout(()=>setRes(null),4000);}
   };
-
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ donation_id: "test_001", donor_name: "Test User", amount: 1000, currency: "IDR", message: "Test ping" }),
-      });
-      setTestResult(res.ok ? "ok" : "fail");
-    } catch {
-      setTestResult("fail");
-    } finally {
-      setTesting(false);
-      setTimeout(() => setTestResult(null), 4000);
-    }
-  };
-
-  const copyWebhook = () => navigator.clipboard.writeText(webhookUrl).catch(() => {});
+  const copUrl = ()=>{ if(!url)return; navigator.clipboard.writeText(url).then(()=>{setCpy(true);setTimeout(()=>setCpy(false),2000);}); };
+  const copRbx = ()=>{ if(rbx)navigator.clipboard.writeText(rbx); };
 
   return (
-    <section className={`${p.borderCls} rounded-xl overflow-hidden shadow-2xl`}>
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-start">
-          <div className="space-y-1">
-            <h3 className={`text-xl font-bold font-headline ${p.color}`}>{p.name}</h3>
-            <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${enabled ? "bg-emerald-400 shadow-[0_0_8px_#10b981]" : "bg-error shadow-[0_0_8px_rgba(255,180,171,0.5)]"}`} />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                {enabled ? "System Online" : "System Offline"}
-              </span>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input className="sr-only peer" type="checkbox" checked={enabled} onChange={() => setEnabled(!enabled)} />
-            <div className="w-11 h-6 bg-surface-container-highest rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-container" />
-          </label>
-        </div>
-
-        {/* Fields */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant ml-1">API Key</label>
-            <div className="relative">
-              <input
-                className={`w-full bg-surface-container-lowest rounded-lg py-3 px-4 font-mono text-sm ${p.color} focus:ring-1 ${p.ringCls} outline-none`}
-                type={show ? "text" : "password"}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={`Enter ${p.name} API Key`}
-              />
-              <button onClick={() => setShow(!show)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors">
-                <span className="material-symbols-outlined text-lg">{show ? "visibility_off" : "visibility"}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant ml-1">Webhook URL</label>
-            <div className="relative">
-              <input
-                className="w-full bg-surface-container-lowest rounded-lg py-3 px-4 font-mono text-sm text-on-surface-variant truncate pr-12 outline-none"
-                type="text" readOnly value={webhookUrl}
-              />
-              <button onClick={copyWebhook}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 ${p.badgeCls} p-1.5 rounded-md hover:opacity-80 transition-all active:scale-90`}>
-                <span className="material-symbols-outlined text-lg">content_copy</span>
-              </button>
-            </div>
-            <p className="text-[10px] text-outline px-1">
-              Paste this URL into your {p.name} webhook settings. Incoming donations trigger real-time notifications.
-            </p>
+    <section className={clsx("bg-surface-container rounded border border-surface-container-high relative overflow-hidden flex flex-col p-6 gap-4 transition-all hover:bg-surface-container-high", p.accentCls)}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-primary tracking-wide" style={G}>{p.label}</h2>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 bg-surface-container-highest rounded-full">
+            <div className={clsx("w-1.5 h-1.5 rounded-full transition-colors", active?"animate-pulse":"bg-outline-variant")}
+              style={active?{background:p.activeColor, boxShadow:`0 0 5px ${p.activeColor}`}:{}}/>
+            <span className="text-[9px] text-on-surface-variant uppercase tracking-wider">{!url?"Not configured":active?"Online":"Offline"}</span>
           </div>
         </div>
+        {/* Toggle switch */}
+        <button onClick={doTog} disabled={tog} className="relative w-10 h-5 rounded-full transition-colors duration-200 focus:outline-none"
+          style={{background: active ? p.activeColor : "#2a2a2a", boxShadow: active ? `0 0 8px ${p.activeColor}55` : "none"}}>
+          <div className={clsx("absolute top-0.5 h-4 w-4 rounded-full bg-on-primary transition-all duration-200 shadow-sm", active?"left-[22px]":"left-[2px]")}
+            style={{background: active ? "#0e0e0e" : "#ffffff"}}/>
+        </button>
+      </div>
 
-        {/* Footer */}
-        <div className="pt-2 flex flex-col gap-3">
-          {testResult && (
-            <div className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg ${
-              testResult === "ok" ? "bg-emerald-500/20 text-emerald-400" : "bg-error/20 text-error"
-            }`}>
-              <span className="material-symbols-outlined text-sm filled">{testResult === "ok" ? "check_circle" : "error"}</span>
-              {testResult === "ok" ? "Webhook reachable ✓" : "Connection failed — check worker deployment"}
-            </div>
+      {/* Health badges */}
+      {health && (
+        <div className="flex flex-wrap gap-2">
+          <span className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-[10px] text-on-surface-variant flex items-center gap-1">
+            <span className="material-symbols-outlined text-[12px]">payments</span>
+            {health.donations_today} Today
+          </span>
+          {health.last_received && (
+            <span className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-[10px] text-on-surface-variant flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">schedule</span>
+              Last: {ago(health.last_received)}
+            </span>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <button onClick={handleTest} disabled={testing}
-              className="py-3 px-4 rounded-lg bg-surface-variant/40 border border-outline-variant/15 text-sm font-semibold hover:bg-surface-variant/60 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5">
-              {testing && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
-              Test Connection
-            </button>
-            <button onClick={handleSave}
-              className={`py-3 px-4 rounded-lg bg-gradient-to-br text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 ${p.saveCls}`}>
-              {saved && <span className="material-symbols-outlined text-sm">check</span>}
-              {saved ? "Saved!" : "Save Changes"}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
+        {/* Webhook URL */}
+        <div className="space-y-1 md:col-span-2">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Webhook URL</label>
+          <div className="flex rounded overflow-hidden">
+            <input className="flex-1 bg-surface-container-lowest border-y border-l border-outline-variant text-on-surface font-mono text-xs px-3 py-2 outline-none truncate"
+              readOnly value={url??""} placeholder="Generate a secret to reveal URL"/>
+            {url ? (
+              <>
+                <button onClick={copUrl} className="bg-surface-container-highest border border-outline-variant px-3 text-on-surface hover:text-primary-fixed transition-colors text-[10px] font-bold uppercase flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px]">{cpy?"check":"content_copy"}</span>{cpy?"Copied":"Copy"}
+                </button>
+                <button onClick={doGen} disabled={gen} title="Regenerate" className="bg-surface-container-highest border-y border-r border-outline-variant px-2 text-on-surface-variant hover:text-primary-fixed transition-colors">
+                  <span className={clsx("material-symbols-outlined text-[13px]",gen&&"animate-spin")}>refresh</span>
+                </button>
+              </>
+            ) : (
+              <button onClick={doGen} disabled={gen} className={clsx("bg-surface-container-highest border border-outline-variant px-3 text-[10px] font-bold uppercase flex items-center gap-1 transition-colors hover:bg-surface-bright",p.badgeCls.split(" ")[0])}>
+                <span className={clsx("material-symbols-outlined text-[13px]",gen&&"animate-spin")}>{gen?"progress_activity":"key"}</span>
+                {gen?"Generating…":"Generate"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* API Key */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>
+            Platform API Key {cfg?.has_api_key && <span className="text-emerald-400 normal-case font-normal ml-1">✓ saved</span>}
+          </label>
+          <div className="relative">
+            <input type={show?"text":"password"} value={key} onChange={e=>setKey(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&doSave()}
+              placeholder={cfg?.has_api_key?"Enter new key to update…":`${p.label} API key`}
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded text-on-surface font-mono text-xs px-3 py-2 pr-9 focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed focus:shadow-[0_0_6px_rgba(200,233,236,0.2)] outline-none transition-all shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]"/>
+            <button onClick={()=>setShow(!show)} className="absolute right-2 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface transition-colors">
+              <span className="material-symbols-outlined text-[15px]">{show?"visibility_off":"visibility"}</span>
             </button>
           </div>
+        </div>
+
+        {/* Roblox Config Key */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Roblox Config Key</label>
+          <div className="flex rounded overflow-hidden">
+            <input readOnly value={rbx??"N/A — Generate key first"}
+              className="flex-1 bg-surface-dim border border-outline-variant/50 text-on-surface-variant font-mono text-xs px-3 py-2 outline-none truncate cursor-default"/>
+            {rbx && (
+              <button onClick={copRbx} className="bg-surface-container-highest border-y border-r border-outline-variant px-3 text-on-surface hover:text-primary-fixed transition-colors text-[10px] font-bold uppercase">Copy</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex flex-col gap-2 pt-3 border-t border-surface-container-high mt-1">
+        {res && (
+          <div className={clsx("flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded", res==="ok"?"bg-emerald-500/20 text-emerald-400":"bg-error/20 text-error")}>
+            <span className="material-symbols-outlined text-[13px] filled">{res==="ok"?"check_circle":"error"}</span>
+            {res==="ok"?"Webhook reachable ✓":"Connection failed — check worker deployment"}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={doTest} disabled={test||!url}
+            className="px-4 py-2 rounded border border-outline-variant text-on-surface text-[10px] font-bold uppercase hover:border-primary-fixed hover:text-primary-fixed hover:shadow-[0_0_8px_rgba(200,233,236,0.2)] transition-all disabled:opacity-40 flex items-center gap-1.5"
+            style={G}>
+            {test&&<span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>}
+            Test Connection
+          </button>
+          <button onClick={doSave} disabled={save||!key.trim()}
+            className="px-4 py-2 rounded bg-primary text-on-primary text-[10px] font-bold uppercase hover:shadow-[0_0_15px_rgba(255,255,255,0.5)] transition-all disabled:opacity-40 flex items-center gap-1.5"
+            style={G}>
+            {save&&<span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>}
+            {save?"Saving…":"Save Configuration"}
+          </button>
         </div>
       </div>
     </section>
   );
 }
 
-export default function ConfigPage() {
-  const { key, save, clear } = useLicenseKey();
-  const [editing, setEditing] = useState(false);
-  const [newKey, setNewKey] = useState(key ?? "");
+export default function ConfigPage() { return <AuthGate><Content /></AuthGate>; }
+
+function Content() {
+  const [configs, setConfigs] = useState<PlatformConfig[]>([]);
+  const [health,  setHealth]  = useState<Record<string,any>>({});
+  const [loading, setLoading] = useState(true);
+
+  const fetch = useCallback(async () => {
+    try {
+      const [c,h] = await Promise.allSettled([api.platform.getConfigs(), api.platform.health()]);
+      if (c.status==="fulfilled") setConfigs(c.value.configs);
+      if (h.status==="fulfilled") { const m:Record<string,any>={}; for(const x of h.value.health)m[x.platform]=x; setHealth(m); }
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(()=>{ fetch(); },[fetch]);
 
   return (
-    <div className="px-4 pb-12 max-w-lg mx-auto space-y-8">
-      <div className="space-y-2 pt-6 px-2">
-        <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Integration Vault</h2>
-        <p className="text-on-surface-variant text-sm leading-relaxed">
-          Securely manage your donation stream endpoints and platform authentication keys.
-        </p>
-      </div>
-
-      {/* License key management */}
-      <div className="glass-panel rounded-xl p-5 border border-outline-variant/10 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Active License Key</div>
-            <code className="font-mono text-xs text-primary break-all">{key ?? "None set"}</code>
-          </div>
-          <button onClick={() => { setEditing(!editing); setNewKey(key ?? ""); }}
-            className="p-2 rounded-lg bg-surface-variant/40 hover:bg-surface-variant transition-colors text-on-surface-variant">
-            <span className="material-symbols-outlined text-sm">edit</span>
-          </button>
+    <div className="p-6 max-w-4xl mx-auto space-y-6 pb-20 md:pb-8">
+      <header className="border-b border-surface-container-high pb-4">
+        <h1 className="text-[28px] font-semibold text-primary drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]" style={G}>Integration Vault</h1>
+        <p className="text-on-surface-variant text-sm mt-1">Securely manage your donation stream endpoints and platform keys.</p>
+      </header>
+      {loading ? (
+        <div className="flex items-center justify-center py-16 gap-3 text-on-surface-variant">
+          <span className="material-symbols-outlined animate-spin">progress_activity</span>
+          Loading platform configs…
         </div>
-        {editing && (
-          <div className="flex gap-2 pt-1">
-            <input className="flex-1 bg-surface-container-lowest rounded-lg py-2.5 px-3 font-mono text-sm focus:ring-1 focus:ring-primary/40 outline-none"
-              value={newKey} onChange={(e) => setNewKey(e.target.value)} placeholder="ETH-CMD-XXXX-XXXX-XXXX" />
-            <button onClick={() => { save(newKey); setEditing(false); }}
-              className="px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold">Save</button>
-            <button onClick={() => { clear(); setEditing(false); }}
-              className="px-3 py-2 rounded-lg bg-error/20 text-error text-sm font-bold">Clear</button>
-          </div>
-        )}
-      </div>
-
-      {PLATFORMS.map((p) => <PlatformCard key={p.id} p={p} />)}
+      ) : (
+        <div className="flex flex-col gap-5">
+          {PLATFORMS.map(p=>(
+            <Card key={p.id} p={p} cfg={configs.find(c=>c.platform===p.id)} health={health[p.id]} onRefresh={fetch}/>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

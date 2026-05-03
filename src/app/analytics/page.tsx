@@ -1,233 +1,268 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { api, formatRp, formatRpFull, PLATFORM_COLOR, type StatsResponse, type LeaderboardEntry } from "@/lib/api";
-import { useLicenseKey } from "@/lib/use-license";
+import { api, formatRp, PLATFORM_LABEL, type StatsResponse, type LeaderboardEntry } from "@/lib/api";
+import { getLicenseKey } from "@/lib/auth";
+import AuthGate from "@/components/AuthGate";
+import clsx from "clsx";
 
-const PERIODS = [
-  { label: "7d",       timeframe: "week"    },
-  { label: "30d",      timeframe: "month"   },
-  { label: "All Time", timeframe: "alltime" },
-];
+const G = { fontFamily: "var(--font-space-grotesk,'Space Grotesk'),sans-serif" };
 
-const PLATFORM_DOT: Record<string, string> = {
-  saweria:    "bg-primary",
-  socialbuzz: "bg-secondary",
-  bagibagi:   "bg-tertiary",
+const PLATFORM_COLOR: Record<string,string> = {
+  saweria:"text-primary-fixed", socialbuzz:"text-secondary",
+  bagibagi:"text-tertiary-fixed-dim", trakteer:"text-error", twitch:"text-purple-400",
+};
+const PLATFORM_BAR: Record<string,string> = {
+  saweria:"bg-primary-fixed", socialbuzz:"bg-secondary",
+  bagibagi:"bg-tertiary-fixed-dim", trakteer:"bg-error", twitch:"bg-purple-400",
 };
 
-export default function AnalyticsPage() {
-  const { key } = useLicenseKey();
-  const [periodIdx, setPeriodIdx] = useState(0);
-  const [stats, setStats] = useState<StatsResponse | null>(null);
-  const [board, setBoard] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function AnalyticsPage() { return <AuthGate><Analytics /></AuthGate>; }
 
-  const load = useCallback(async () => {
-    if (!key) return;
-    setLoading(true);
-    try {
-      const [s, l] = await Promise.all([
-        api.donations.stats(key),
-        api.leaderboard(key, PERIODS[periodIdx].timeframe),
+function Analytics() {
+  const licenseKey = getLicenseKey();
+  const [stats,    setStats]    = useState<StatsResponse|null>(null);
+  const [leaders,  setLeaders]  = useState<LeaderboardEntry[]>([]);
+  const [logs,     setLogs]     = useState<any[]>([]);
+  const [tab,      setTab]      = useState<"today"|"week"|"month"|"alltime">("month");
+  const [logFilter,setLogFilter]= useState("all");
+  const [loading,  setLoading]  = useState(true);
+
+  const load = useCallback(async()=>{
+    if(!licenseKey)return;
+    try{
+      const [s,l,wl] = await Promise.allSettled([
+        api.donations.stats(licenseKey),
+        api.leaderboard(licenseKey,"alltime"),
+        api.webhook.logs().catch(()=>({logs:[],total:0})),
       ]);
-      setStats(s);
-      setBoard(l.leaderboard ?? []);
-    } catch { /* silent */ }
-    finally { setLoading(false); }
-  }, [key, periodIdx]);
+      if(s.status==="fulfilled") setStats(s.value);
+      if(l.status==="fulfilled") setLeaders(l.value.leaderboard);
+      if(wl.status==="fulfilled") setLogs((wl.value as any).logs??[]);
+    } finally { setLoading(false); }
+  },[licenseKey]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(()=>{ load(); },[load]);
 
-  const t = stats?.totals;
-  const byPlatform = stats?.by_platform ?? [];
-  const totalPlatform = byPlatform.reduce((s, p) => s + p.total, 0) || 1;
-  const maxDonor = board[0]?.total_amount || 1;
+  const loadLeaders = async(tf: typeof tab)=>{
+    if(!licenseKey)return; setTab(tf);
+    const r = await api.leaderboard(licenseKey,tf).catch(()=>null);
+    if(r) setLeaders(r.leaderboard);
+  };
 
-  const bars = stats?.by_day ?? [];
-  const maxBar = Math.max(...bars.map((b) => b.total), 1);
+  const doExport = ()=>{
+    if(!licenseKey)return;
+    const url = `${process.env.NEXT_PUBLIC_API_URL}/api/donations/export?license_key=${licenseKey}&format=csv`;
+    window.open(url,"_blank");
+  };
 
-  // SVG path from by_day data (last 7 points)
-  const pts = bars.slice(-7);
-  let svgPath = "";
-  let svgArea = "";
-  if (pts.length > 1) {
-    const coords = pts.map((b, i) => ({
-      x: (i / (pts.length - 1)) * 100,
-      y: 100 - Math.round((b.total / maxBar) * 90),
-    }));
-    svgPath = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x},${c.y}`).join(" ");
-    svgArea = `${svgPath} L100,100 L0,100 Z`;
-  }
+  const totals = (stats as any)?.totals;
+  const byPlat = (stats as any)?.by_platform??[];
+  const maxVol = Math.max(...byPlat.map((p:any)=>p.total),1);
+
+  const filteredLogs = logFilter==="all" ? logs : logFilter==="errors" ? logs.filter((l:any)=>l.status>=400) : logs.filter((l:any)=>l.platform===logFilter);
 
   return (
-    <div className="px-4 pb-12 flex flex-col gap-6 max-w-lg mx-auto">
-      {/* Header + period tabs */}
-      <section className="flex flex-col gap-4 pt-4">
+    <div className="p-6 max-w-[1440px] mx-auto pb-20 md:pb-8">
+      {/* Header */}
+      <header className="flex justify-between items-end mb-6 border-b border-surface-container-high pb-4">
         <div>
-          <span className="font-headline uppercase tracking-widest text-[10px] font-bold text-primary">System Monitoring</span>
-          <h2 className="text-3xl font-bold font-headline tracking-tight mt-1">Analytics Hub</h2>
+          <h1 className="text-[28px] font-semibold text-primary tracking-tight drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" style={G}>Analytics Hub</h1>
+          <p className="text-on-surface-variant text-sm mt-0.5">Deep dive into multi-dimensional signal flows and asset ingestion.</p>
         </div>
-        <div className="flex p-1 bg-surface-container-low rounded-xl gap-1">
-          {PERIODS.map((p, i) => (
-            <button key={p.label} onClick={() => setPeriodIdx(i)}
-              className={`flex-1 py-2 text-sm font-semibold rounded-lg whitespace-nowrap transition-all ${
-                periodIdx === i
-                  ? "bg-gradient-to-br from-primary to-primary-container text-white shadow-lg"
-                  : "text-on-surface-variant hover:bg-surface-container-highest"
-              }`}
-            >{p.label}</button>
+        <button onClick={doExport} className="bg-primary text-on-primary text-[10px] font-bold uppercase px-4 py-2 rounded hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)] transition-all flex items-center gap-1.5" style={G}>
+          <span className="material-symbols-outlined text-[15px]">download</span>Export CSV
+        </button>
+      </header>
+
+      {/* Timeframe Tabs */}
+      <div className="flex gap-6 mb-6 border-b border-outline-variant">
+        {(["today","week","month","alltime"] as const).map(t=>(
+          <button key={t} onClick={()=>loadLeaders(t)}
+            className={clsx("text-[10px] font-bold uppercase pb-2 transition-colors", tab===t?"text-primary border-b-2 border-primary drop-shadow-[0_0_5px_rgba(255,255,255,0.3)]":"text-on-surface-variant hover:text-on-surface")}
+            style={G}>
+            {t==="today"?"Today":t==="week"?"This Week":t==="month"?"This Month":"All Time"}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-12 gap-5">
+        {/* Summary pills */}
+        <div className="col-span-12 grid grid-cols-2 md:grid-cols-4 gap-5">
+          {[
+            {label:"Total Volume",  val:totals?formatRp(totals.total??0):"—",   color:"bg-primary"},
+            {label:"Transactions",  val:totals?String(totals.count??0):"—",       color:"bg-secondary"},
+            {label:"Avg Signal",    val:totals?formatRp(Math.round(totals.avg??0)):"—", color:"bg-primary-fixed"},
+            {label:"Unique Entities",val:totals?String(totals.unique_donors??0):"—",    color:"bg-secondary-fixed"},
+          ].map(({label,val,color})=>(
+            <div key={label} className="bg-surface-container border border-surface-container-high rounded p-5 relative overflow-hidden group">
+              <div className={clsx("absolute top-0 left-0 w-full h-0.5 opacity-50 group-hover:opacity-100 group-hover:shadow-[0_0_10px] transition-all",color)}/>
+              <div className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant mb-2" style={G}>{label}</div>
+              <div className="text-[36px] font-black text-primary tracking-tighter leading-none drop-shadow-[0_0_6px_rgba(255,255,255,0.15)]" style={G}>
+                {loading?"—":val}
+              </div>
+            </div>
           ))}
         </div>
-      </section>
 
-      {/* Bento stats */}
-      <section className="grid grid-cols-2 gap-4">
-        <div className="col-span-2 bg-surface-container-highest p-5 rounded-xl flex flex-col gap-1 border border-outline-variant/10 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16 transition-transform group-hover:scale-125 duration-500" style={{ background: "rgba(174,198,255,0.1)" }} />
-          <span className="text-xs font-medium text-on-surface-variant uppercase tracking-wider">Total IDR Raised</span>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-black font-headline text-primary tracking-tighter">
-              {loading ? "—" : formatRp(t?.total ?? 0)}
-            </span>
-            <span className="text-xs text-on-surface-variant font-bold mb-1.5">Rp</span>
-          </div>
-        </div>
-        {[
-          { label: "Unique Donors", value: loading ? "—" : String(t?.unique_donors ?? 0) },
-          { label: "Avg Donation",  value: loading ? "—" : `Rp ${formatRp(t?.avg ?? 0)}` },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-surface-container p-4 rounded-xl flex flex-col gap-1 border border-outline-variant/5">
-            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{label}</span>
-            <span className="text-2xl font-bold font-headline">{value}</span>
-          </div>
-        ))}
-      </section>
-
-      {/* Trend chart */}
-      <section className="bg-surface-container-low p-6 rounded-xl relative overflow-hidden">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold font-headline tracking-tight">Donation Trend</h3>
-          <span className="text-[10px] text-on-surface-variant uppercase tracking-widest">Last 7 days</span>
-        </div>
-        <div className="h-48 w-full relative">
-          <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
-            <defs>
-              <linearGradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#aec6ff" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#aec6ff" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {svgPath ? (
-              <>
-                <path d={svgArea} fill="url(#lineGrad)" />
-                <path d={svgPath} fill="none" stroke="#aec6ff" strokeWidth="2" vectorEffect="non-scaling-stroke" />
-              </>
-            ) : (
-              <>
-                <path d="M0,80 Q10,75 20,60 T40,40 T60,50 T80,20 T100,30 V100 H0 Z" fill="url(#lineGrad)" opacity="0.3" />
-                <path d="M0,80 Q10,75 20,60 T40,40 T60,50 T80,20 T100,30" fill="none" stroke="#aec6ff" strokeWidth="2" vectorEffect="non-scaling-stroke" opacity="0.3" />
-              </>
-            )}
-          </svg>
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-10">
-            {[0,1,2,3].map(i => <div key={i} className="w-full h-px bg-white" />)}
-          </div>
-        </div>
-        <div className="flex justify-between mt-4 text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">
-          {pts.length > 0
-            ? pts.map((b) => <span key={b.day}>{new Date(b.day).toLocaleDateString("id-ID", { weekday: "short" })}</span>)
-            : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => <span key={d}>{d}</span>)
-          }
-        </div>
-      </section>
-
-      {/* Platform donut */}
-      <section className="bg-surface-container-low p-6 rounded-xl">
-        <h3 className="text-lg font-bold font-headline tracking-tight mb-6">Platform Breakdown</h3>
-        <div className="flex items-center gap-8">
-          <div className="relative w-32 h-32 flex-shrink-0">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-              <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none" stroke="#1e3c72" strokeWidth="4" strokeDasharray="100,100" />
-              {(() => {
-                let offset = 0;
-                const colors = ["#aec6ff", "#d2bbff", "#86efac"];
-                return byPlatform.slice(0, 3).map((p, i) => {
-                  const pct = Math.round((p.total / totalPlatform) * 100);
-                  const el = (
-                    <path key={p.platform}
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      fill="none" stroke={colors[i]} strokeWidth="4"
-                      strokeDasharray={`${pct},100`}
-                      strokeDashoffset={`-${offset}`}
-                      strokeLinecap="round" />
-                  );
-                  offset += pct;
-                  return el;
-                });
-              })()}
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-xl font-black font-headline leading-none">
-                {byPlatform[0] ? Math.round((byPlatform[0].total / totalPlatform) * 100) + "%" : "—"}
-              </span>
-              <span className="text-[8px] font-bold text-on-surface-variant uppercase tracking-widest">
-                {byPlatform[0]?.platform ?? "—"}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3 flex-1">
-            {byPlatform.length > 0
-              ? byPlatform.map((p) => (
-                  <div key={p.platform} className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${PLATFORM_DOT[p.platform] ?? "bg-primary"}`} />
-                    <span className="text-xs font-semibold capitalize">{p.platform}</span>
-                    <span className="text-xs text-on-surface-variant ml-auto">
-                      {Math.round((p.total / totalPlatform) * 100)}%
+        {/* Platform Breakdown */}
+        <div className="col-span-12 md:col-span-4 bg-surface-container border border-surface-container-high rounded p-5 flex flex-col">
+          <h3 className="text-base font-semibold text-on-surface mb-5" style={G}>Platform Ingestion</h3>
+          <div className="flex-1 flex flex-col gap-4">
+            {byPlat.length===0 ? (
+              <p className="text-on-surface-variant text-sm">No data yet</p>
+            ) : byPlat.map((p:any)=>{
+              const pct = Math.round((p.total/maxVol)*100);
+              return (
+                <div key={p.platform} className="flex flex-col gap-1.5">
+                  <div className="flex justify-between text-[10px] font-bold uppercase text-on-surface-variant">
+                    <span>{PLATFORM_LABEL[p.platform]??p.platform}</span>
+                    <span className={PLATFORM_COLOR[p.platform]??""}>
+                      {pct}% / {formatRp(p.total)}
                     </span>
                   </div>
-                ))
-              : [["Saweria","bg-primary"],["SocialBuzz","bg-secondary"],["BagiBagi","bg-tertiary"]].map(([l, cls]) => (
-                  <div key={l} className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${cls}`} />
-                    <span className="text-xs font-semibold text-on-surface-variant">{l}</span>
-                    <span className="text-xs text-on-surface-variant ml-auto">—</span>
+                  <div className="w-full h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                    <div className={clsx("h-full rounded-full transition-all duration-700",PLATFORM_BAR[p.platform]??"bg-outline")}
+                      style={{width:`${pct}%`, filter:"drop-shadow(0 0 4px currentColor)"}}/>
                   </div>
-                ))
-            }
+                </div>
+              );
+            })}
           </div>
         </div>
-      </section>
 
-      {/* Top donors */}
-      <section className="bg-surface-container-low p-6 rounded-xl">
-        <h3 className="text-lg font-bold font-headline tracking-tight mb-6">Top Donors — {PERIODS[periodIdx].label}</h3>
-        <div className="flex flex-col gap-5">
-          {loading
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="h-8 rounded-lg bg-surface-container-high animate-pulse" />
-              ))
-            : board.length === 0
-            ? <div className="text-center text-on-surface-variant text-sm py-4">No donors yet</div>
-            : board.slice(0, 5).map((e) => {
-                const pct = Math.round((e.total_amount / maxDonor) * 100);
-                return (
-                  <div key={e.rank} className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center px-1">
-                      <span className="text-xs font-bold font-headline">{e.donor_name}</span>
-                      <span className={`text-xs font-bold ${PLATFORM_COLOR[e.platform] ?? "text-primary"}`}>
-                        Rp {formatRpFull(e.total_amount)}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary-container transition-all duration-700" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })
-          }
+        {/* 30-Day Trend */}
+        <div className="col-span-12 md:col-span-8 bg-surface-container border border-surface-container-high rounded p-5 flex flex-col">
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-base font-semibold text-on-surface" style={G}>Signal Trend (30 Days)</h3>
+            <span className="px-2 py-1 bg-surface-container-highest text-primary text-[10px] font-bold uppercase rounded border border-surface-container-high" style={G}>
+              All Time
+            </span>
+          </div>
+          <div className="flex-1 relative min-h-[200px]">
+            <svg className="absolute inset-0 w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
+              <line stroke="#353534" strokeWidth="0.5" x1="0" x2="100" y1="25" y2="25"/>
+              <line stroke="#353534" strokeWidth="0.5" x1="0" x2="100" y1="50" y2="50"/>
+              <line stroke="#353534" strokeWidth="0.5" x1="0" x2="100" y1="75" y2="75"/>
+              {(stats as any)?.by_day?.length > 1 ? (()=>{
+                const days:(({total:number})[]) = (stats as any).by_day;
+                const max = Math.max(...days.map(d=>d.total),1);
+                const pts = days.map((d,i)=>`${(i/(days.length-1))*100},${100-(d.total/max)*90}`);
+                return (<>
+                  <path d={`M${pts.join(" L")}`} fill="none" stroke="#ffffff" strokeWidth="1.5" style={{filter:"drop-shadow(0px 0px 4px rgba(255,255,255,0.4))"}}/>
+                  {days.map((d,i)=>{
+                    const cx=(i/(days.length-1))*100;
+                    const cy=100-(d.total/max)*90;
+                    return <circle key={i} cx={cx} cy={cy} r={i===days.length-1?"2.5":"1.5"} fill="#ffffff" className={i===days.length-1?"animate-pulse":""}/>;
+                  })}
+                </>);
+              })() : (
+                <>
+                  <path d="M0,90 Q10,80 20,85 T40,60 T60,50 T80,20 T100,10" fill="none" stroke="#ffffff" strokeWidth="1.5" style={{filter:"drop-shadow(0px 0px 4px rgba(255,255,255,0.5))"}}/>
+                  {[[0,90],[20,85],[40,60],[60,50],[80,20],[100,10]].map(([cx,cy],i)=>(
+                    <circle key={i} cx={cx} cy={cy} r={i===5?"2.5":"1.5"} fill="#ffffff" className={i===5?"animate-pulse":""}/>
+                  ))}
+                </>
+              )}
+            </svg>
+          </div>
         </div>
-      </section>
+
+        {/* Entity Ledger */}
+        <div className="col-span-12 bg-surface-container border border-surface-container-high rounded overflow-hidden">
+          <div className="p-5 border-b border-surface-container-high flex justify-between items-center">
+            <h3 className="text-base font-semibold text-on-surface" style={G}>Entity Ledger</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-surface-container-lowest">
+                  {["Rank","Designation","Vector","Volume","Count","Last Sync"].map(h=>(
+                    <th key={h} className="p-4 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-surface-container-high text-left last:text-right"
+                      style={G}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="text-sm text-on-surface">
+                {leaders.slice(0,20).map((l,i)=>{
+                  const rankColor = i===0?"text-primary":i===1?"text-secondary":i===2?"text-primary-fixed":"text-on-surface-variant";
+                  return (
+                    <tr key={l.donor_name} className="hover:bg-surface-container-highest transition-colors border-b border-surface-container-high/50 group">
+                      <td className={clsx("p-4 font-bold",rankColor)}>#{String(i+1).padStart(2,"0")}</td>
+                      <td className="p-4 flex items-center gap-2">
+                        <div className={clsx("w-6 h-6 rounded bg-surface-container-highest border border-outline-variant flex items-center justify-center text-[10px] font-bold",rankColor)}>
+                          {l.donor_name.charAt(0).toUpperCase()}
+                        </div>
+                        {l.donor_name}
+                      </td>
+                      <td className="p-4">
+                        <span className={clsx("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border bg-transparent",
+                          `${PLATFORM_COLOR[l.platform]??""} border-current/30`)}>
+                          {PLATFORM_LABEL[l.platform]??l.platform}
+                        </span>
+                      </td>
+                      <td className={clsx("p-4 font-semibold group-hover:drop-shadow-[0_0_4px_rgba(255,255,255,0.4)]",rankColor)}>
+                        {formatRp(l.total_amount)}
+                      </td>
+                      <td className="p-4 text-on-surface-variant">{l.donation_count}</td>
+                      <td className="p-4 text-on-surface-variant text-right text-xs">
+                        {l.last_donation_at ? new Date(l.last_donation_at).toLocaleDateString() : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Raw Signal Logs */}
+        <div className="col-span-12 bg-surface-container border border-surface-container-high rounded overflow-hidden flex flex-col">
+          <div className="p-5 border-b border-surface-container-high flex justify-between items-center bg-surface-container-lowest">
+            <h3 className="text-base font-semibold text-primary flex items-center gap-2" style={G}>
+              <span className="material-symbols-outlined text-[16px]">terminal</span>Raw Signal Logs
+            </h3>
+            <div className="flex gap-2 flex-wrap">
+              {["all","errors","saweria","socialbuzz","bagibagi","trakteer"].map(f=>(
+                <button key={f} onClick={()=>setLogFilter(f)}
+                  className={clsx("px-2 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full border transition-colors",
+                    logFilter===f?"bg-primary/20 text-primary border-primary/50":"bg-surface-container-highest text-on-surface-variant border-surface-container-high hover:text-on-surface")}
+                  style={G}>{f==="all"?"All Vectors":f==="errors"?"Errors":PLATFORM_LABEL[f]??f}</button>
+              ))}
+            </div>
+          </div>
+          <div className="p-4 bg-black/50 font-mono text-[11px] leading-relaxed text-on-surface-variant h-[240px] overflow-y-auto space-y-3">
+            {filteredLogs.length===0 ? (
+              <div className="flex items-center gap-2 text-outline py-2">
+                <span className="material-symbols-outlined text-[14px]">hourglass_empty</span>
+                No logs yet — start receiving webhooks to see entries here.
+              </div>
+            ) : filteredLogs.map((l:any)=>(
+              <div key={l.id} className={clsx(
+                "border-l-2 pl-3 py-1 relative group cursor-pointer rounded-r transition-colors hover:bg-surface-container-high",
+                l.status>=400?"border-error":"border-primary-fixed"
+              )}>
+                <div className="flex justify-between items-start">
+                  <div className="flex gap-3">
+                    <span className="text-primary-fixed">[{new Date(l.created_at).toISOString().slice(11,19)}]</span>
+                    <span className={clsx("font-bold",l.status>=400?"text-error":"text-primary")}>{l.status>=400?"WARN":"INFO"}</span>
+                    <span className="text-on-surface uppercase tracking-wider">{l.platform?.toUpperCase()}_WEBHOOK</span>
+                    <span className={clsx("px-1 rounded text-[9px]",l.status>=400?"bg-error/20 text-error":"bg-primary-fixed/10 text-primary-fixed")}>
+                      {l.status}
+                    </span>
+                  </div>
+                  <span className="material-symbols-outlined text-[12px] text-outline opacity-0 group-hover:opacity-100">expand_more</span>
+                </div>
+                {l.payload_parsed && (
+                  <div className="mt-1 pl-4 text-primary-fixed-dim/70 text-[10px]">
+                    {JSON.stringify(l.payload_parsed).slice(0,120)}…
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

@@ -1,75 +1,81 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface:                   #0b1326;
-  --color-surface-dim:               #0b1326;
-  --color-surface-bright:            #31394d;
-  --color-surface-variant:           #2d3449;
-  --color-surface-container-lowest:  #060e20;
-  --color-surface-container-low:     #131b2e;
-  --color-surface-container:         #171f33;
-  --color-surface-container-high:    #222a3d;
-  --color-surface-container-highest: #2d3449;
-  --color-background:                #0b1326;
-  --color-inverse-surface:           #dae2fd;
-  --color-inverse-on-surface:        #283044;
+  /* ── Aether Nexus Surface Scale ── */
+  --color-background:                #131313;
+  --color-surface:                   #131313;
+  --color-surface-dim:               #131313;
+  --color-surface-bright:            #3a3939;
+  --color-surface-variant:           #353534;
+  --color-surface-container-lowest:  #0e0e0e;
+  --color-surface-container-low:     #1c1b1b;
+  --color-surface-container:         #201f1f;
+  --color-surface-container-high:    #2a2a2a;
+  --color-surface-container-highest: #353534;
+  --color-inverse-surface:           #e5e2e1;
+  --color-inverse-on-surface:        #313030;
 
-  --color-primary:                   #aec6ff;
-  --color-on-primary:                #0c2e64;
-  --color-primary-container:         #1e3c72;
-  --color-on-primary-container:      #8da8e5;
-  --color-primary-fixed:             #d8e2ff;
-  --color-primary-fixed-dim:         #aec6ff;
-  --color-on-primary-fixed:          #001a42;
-  --color-on-primary-fixed-variant:  #29457c;
-  --color-inverse-primary:           #425d95;
-  --color-surface-tint:              #aec6ff;
+  /* ── Primary (white + cyan) ── */
+  --color-primary:                   #ffffff;
+  --color-on-primary:                #163538;
+  --color-primary-container:         #c8e9ec;
+  --color-on-primary-container:      #4b6a6c;
+  --color-primary-fixed:             #c8e9ec;
+  --color-primary-fixed-dim:         #accccf;
+  --color-on-primary-fixed:          #002022;
+  --color-on-primary-fixed-variant:  #2e4c4e;
+  --color-inverse-primary:           #456366;
+  --color-surface-tint:              #accccf;
 
-  --color-secondary:                 #d2bbff;
-  --color-on-secondary:              #3f008e;
-  --color-secondary-container:       #6001d1;
-  --color-on-secondary-container:    #c9aeff;
-  --color-secondary-fixed:           #eaddff;
-  --color-secondary-fixed-dim:       #d2bbff;
-  --color-on-secondary-fixed:        #25005a;
-  --color-on-secondary-fixed-variant:#5a00c6;
+  /* ── Secondary (purple) ── */
+  --color-secondary:                 #ecb2ff;
+  --color-on-secondary:              #4a1a5d;
+  --color-secondary-container:       #653578;
+  --color-on-secondary-container:    #dda4f0;
+  --color-secondary-fixed:           #f8d8ff;
+  --color-secondary-fixed-dim:       #ecb2ff;
+  --color-on-secondary-fixed:        #320046;
+  --color-on-secondary-fixed-variant:#623375;
 
-  --color-tertiary:                  #ffb77b;
-  --color-on-tertiary:               #4d2700;
-  --color-tertiary-container:        #603200;
-  --color-on-tertiary-container:     #dd9a61;
-  --color-tertiary-fixed:            #ffdcc2;
-  --color-tertiary-fixed-dim:        #ffb77b;
-  --color-on-tertiary-fixed:         #2e1500;
-  --color-on-tertiary-fixed-variant: #6b3b07;
+  /* ── Tertiary (cream/warm) ── */
+  --color-tertiary:                  #ffffff;
+  --color-on-tertiary:               #353021;
+  --color-tertiary-container:        #ebe2cb;
+  --color-on-tertiary-container:     #6a6452;
+  --color-tertiary-fixed:            #ebe2cb;
+  --color-tertiary-fixed-dim:        #cfc6b0;
+  --color-on-tertiary-fixed:         #1f1b0e;
+  --color-on-tertiary-fixed-variant: #4c4636;
 
+  /* ── Error ── */
   --color-error:                     #ffb4ab;
   --color-on-error:                  #690005;
   --color-error-container:           #93000a;
   --color-on-error-container:        #ffdad6;
 
-  --color-outline:                   #8e909b;
-  --color-outline-variant:           #44474f;
-  --color-on-surface:                #dae2fd;
-  --color-on-surface-variant:        #c4c6d1;
-  --color-on-background:             #dae2fd;
+  /* ── Outlines & Text ── */
+  --color-outline:                   #8b9292;
+  --color-outline-variant:           #414849;
+  --color-on-surface:                #e5e2e1;
+  --color-on-surface-variant:        #c1c8c8;
+  --color-on-background:             #e5e2e1;
 
-  --font-headline: var(--font-jakarta), sans-serif;
-  --font-body:     var(--font-inter), sans-serif;
-  --font-mono:     var(--font-jetbrains), monospace;
+  /* ── Typography ── */
+  --font-grotesk: var(--font-space-grotesk), "Space Grotesk", sans-serif;
+  --font-body:    var(--font-inter), "Inter", sans-serif;
+  --font-mono:    ui-monospace, "SFMono-Regular", "Menlo", monospace;
 }
 
+/* ── Base ── */
 body {
-  font-family: var(--font-inter), sans-serif;
-  background-color: #0b1326;
-  color: #dae2fd;
+  font-family: var(--font-inter), "Inter", sans-serif;
+  background-color: #131313;
+  color: #e5e2e1;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
 }
 
-.font-headline { font-family: var(--font-jakarta), sans-serif; }
-.font-mono     { font-family: var(--font-jetbrains), monospace; }
-
+/* ── Material Symbols ── */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   font-style: normal;
@@ -78,29 +84,55 @@ body {
 }
 .filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
 
-.glass-panel {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  background: rgba(45, 52, 73, 0.6);
+/* ── Font helpers ── */
+.font-grotesk { font-family: var(--font-space-grotesk), "Space Grotesk", sans-serif; }
+
+/* ── Cyber effects ── */
+.cyber-glow        { box-shadow: 0 0 12px rgba(200, 233, 236, 0.15); }
+.cyber-glow-lg     { box-shadow: 0 0 24px rgba(200, 233, 236, 0.2); }
+.cyber-glow-purple { box-shadow: 0 0 12px rgba(236, 178, 255, 0.2); }
+
+.cyber-border-hover:hover {
+  border-color: #c8e9ec;
+  box-shadow: 0 0 10px rgba(200, 233, 236, 0.2);
 }
 
-.gradient-border-saweria {
-  background: linear-gradient(to bottom, #1e3c72, #0b1326) padding-box,
-              linear-gradient(135deg, #aec6ff 0%, #1e3c72 100%) border-box;
-  border: 2px solid transparent;
-}
-.gradient-border-socialbuzz {
-  background: linear-gradient(to bottom, #0b1326, #0b1326) padding-box,
-              linear-gradient(135deg, #d2bbff 0%, #6001d1 100%) border-box;
-  border: 2px solid transparent;
-}
-.gradient-border-bagibagi {
-  background: linear-gradient(to bottom, #0b1326, #0b1326) padding-box,
-              linear-gradient(135deg, #ffb77b 0%, #603200 100%) border-box;
-  border: 2px solid transparent;
+/* ── Grid background ── */
+.grid-bg {
+  background-image:
+    linear-gradient(to right,  rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
-::-webkit-scrollbar       { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1e3c72; border-radius: 10px; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar         { width: 5px; height: 5px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: #353534; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #414849; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ── Custom range slider ── */
+input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 16px; width: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  margin-top: -6px;
+  box-shadow: 0 0 8px rgba(255,255,255,0.4);
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%; height: 4px;
+  cursor: pointer;
+  background: #414849;
+  border-radius: 2px;
+}
+
+/* ── Platform accent borders ── */
+.border-saweria   { border-left: 3px solid #c8e9ec; box-shadow: -3px 0 10px rgba(200,233,236,0.3); }
+.border-socialbuzz{ border-left: 3px solid #ecb2ff; box-shadow: -3px 0 10px rgba(236,178,255,0.3); }
+.border-bagibagi  { border-left: 3px solid #ebe2cb; box-shadow: -3px 0 8px rgba(235,226,203,0.2); }
+.border-trakteer  { border-left: 3px solid #ffb4ab; box-shadow: -3px 0 8px rgba(255,180,171,0.2); }
+.border-twitch    { border-left: 3px solid #bf94ff; box-shadow: -3px 0 8px rgba(191,148,255,0.2); }

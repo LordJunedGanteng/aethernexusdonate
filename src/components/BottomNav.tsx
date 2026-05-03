@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { useAuth } from "@/lib/auth";
 
 const NAV = [
-  { href: "/",          icon: "dashboard",     label: "Command"   },
+  { href: "/",          icon: "dashboard",     label: "Dashboard"   },
   { href: "/stream",    icon: "payments",      label: "Stream"    },
   { href: "/analytics", icon: "query_stats",   label: "Analytics", fab: true },
   { href: "/licenses",  icon: "verified_user", label: "Vault"     },
@@ -14,13 +15,21 @@ const NAV = [
 
 export default function BottomNav() {
   const path = usePathname();
+  const { user } = useAuth();
+  
+  if (path === '/login') return null;
+
+  const items = [...NAV];
+  if (user?.role === 'admin') {
+    items.push({ href: "/admin", icon: "admin_panel_settings", label: "Admin", fab: false });
+  }
 
   return (
     <nav
       className="fixed bottom-0 w-full flex justify-between items-center px-4 py-3 z-50 border-t border-outline-variant/10"
       style={{ background: "rgba(11,19,38,0.85)", backdropFilter: "blur(24px)" }}
     >
-      {NAV.map(({ href, icon, label, fab }) => {
+      {items.map(({ href, icon, label, fab }) => {
         const active = path === href;
         if (fab) {
           return (
