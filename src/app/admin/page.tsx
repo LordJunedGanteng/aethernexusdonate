@@ -45,13 +45,45 @@ function Admin() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setPreviewLoading(true);
+      setGamePreview(null);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 7000);
       try {
-        const res = await fetch(`${WORKER_URL}/api/roblox/game?universe_id=${uid}`);
-        if (res.ok) setGamePreview(await res.json());
-        else setGamePreview(null);
+        // Try worker first (has KV cache), fallback to direct Roblox API
+        let data: RobloxGameInfo | null = null;
+        try {
+          const res = await fetch(`${WORKER_URL}/api/roblox/game?universe_id=${uid}`, { signal: controller.signal });
+          if (res.ok) data = await res.json();
+        } catch {}
+
+        // Direct Roblox API fallback
+        if (!data) {
+          const [gRes, tRes] = await Promise.all([
+            fetch(`https://games.roblox.com/v1/games?universeIds=${uid}`, { signal: controller.signal }),
+            fetch(`https://thumbnails.roblox.com/v1/games/icons?universeIds=${uid}&size=512x512&format=Png&isCircular=false`, { signal: controller.signal }),
+          ]);
+          if (gRes.ok) {
+            const gd = await gRes.json() as { data: any[] };
+            const g = gd.data?.[0];
+            if (g) {
+              const td = tRes.ok ? await tRes.json() as { data: any[] } : { data: [] };
+              data = {
+                universeId:  g.id,
+                name:        g.name,
+                description: g.description ?? '',
+                creator:     g.creator?.name ?? 'Unknown',
+                playing:     g.playing ?? 0,
+                visits:      g.visits ?? 0,
+                maxPlayers:  g.maxPlayers ?? 0,
+                thumbnailUrl: td.data?.[0]?.imageUrl ?? null,
+              };
+            }
+          }
+        }
+        setGamePreview(data);
       } catch { setGamePreview(null); }
-      finally { setPreviewLoading(false); }
-    }, 600);
+      finally { clearTimeout(timeout); setPreviewLoading(false); }
+    }, 700);
   },[form.universe_id]);
 
   const generate = async () => {
@@ -221,6 +253,12 @@ function Admin() {
                     <div className="h-3 bg-surface-container-high rounded w-3/4"/>
                     <div className="h-2 bg-surface-container-high rounded w-1/2"/>
                   </div>
+                </div>
+              )}
+              {!previewLoading && form.universe_id.length >= 5 && !gamePreview && (
+                <div className="flex items-center gap-2 bg-error/5 border border-error/20 rounded p-2.5 text-[10px] text-error font-mono">
+                  <span className="material-symbols-outlined text-[14px]">error</span>
+                  Universe ID not found — make sure it's a Universe ID, not a Place ID
                 </div>
               )}
               {!previewLoading && gamePreview && (
