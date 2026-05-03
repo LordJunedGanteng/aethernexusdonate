@@ -15,10 +15,11 @@ function Admin() {
   const [search,  setSearch]  = useState("");
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
-    username:    "",
-    password:    "",
-    role:        "standard",
-    licensed_to: "",
+    username:     "",
+    password:     "",
+    role:         "standard",
+    licensed_to:  "",
+    universe_id:  "",
   });
   const [showPw, setShowPw] = useState(false);
   const [genResult, setGenResult] = useState<{license_key:string; username:string}|null>(null);
@@ -38,9 +39,9 @@ function Admin() {
     if (!form.username.trim() || !form.password.trim()) return;
     setSaving(true);
     try {
-      const r = await api.admin.generateKey(form.username, form.password, form.role, form.licensed_to);
+      const r = await api.admin.generateKey(form.username, form.password, form.role, form.licensed_to, form.universe_id);
       setGenResult(r as any);
-      setForm({ username: "", password: "", role: "standard", licensed_to: "" });
+      setForm({ username: "", password: "", role: "standard", licensed_to: "", universe_id: "" });
       const ru = await api.admin.listUsers();
       setUsers((ru as any).users ?? []);
     } catch (e: any) { alert(e.message); }
@@ -172,6 +173,26 @@ function Admin() {
                 placeholder="e.g. Nexus Protocol, John's Game"
                 className="bg-surface-container-high border border-outline-variant rounded px-3 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all"
               />
+            </div>
+
+            {/* Universe ID */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>
+                Universe ID
+                <span className="ml-1.5 text-outline normal-case font-normal">— Roblox Experience ID</span>
+              </label>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[15px]">public</span>
+                <input
+                  value={form.universe_id}
+                  onChange={e=>setForm({...form,universe_id:e.target.value.replace(/\D/g,"")})}
+                  placeholder="e.g. 6872265039"
+                  className="w-full bg-surface-container-high border border-outline-variant rounded pl-9 pr-3 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all font-mono"
+                />
+              </div>
+              <p className="text-[9px] text-outline font-mono">
+                Roblox → Game → ⋯ → Copy Universe ID
+              </p>
             </div>
           </div>
 
