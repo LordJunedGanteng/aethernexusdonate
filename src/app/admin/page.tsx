@@ -321,7 +321,15 @@ function Admin() {
                     </td>
                     <td className="p-4 text-outline-variant text-xs">{u.created_at?.slice(0,10)??"—"}</td>
                     <td className="p-4 text-right">
-                      <button className="material-symbols-outlined text-outline-variant hover:text-error hover:drop-shadow-[0_0_6px_rgba(255,180,171,0.5)] transition-all text-[18px]">
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Delete user "${u.username}"? This will also remove their license and all platform configs.`)) return;
+                          try {
+                            await api.admin.deleteUser(u.id);
+                            setUsers(prev => prev.filter(x => x.id !== u.id));
+                          } catch (e: any) { alert(e.message); }
+                        }}
+                        className="material-symbols-outlined text-outline-variant hover:text-error hover:drop-shadow-[0_0_6px_rgba(255,180,171,0.5)] transition-all text-[18px]">
                         delete_forever
                       </button>
                     </td>
