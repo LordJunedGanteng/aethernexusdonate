@@ -16,6 +16,7 @@ function Licenses() {
 
   const load = useCallback(async () => {
     try { const r = await api.licenses.list(); setLicenses(r.licenses); }
+    catch (e) { console.error('[Licenses]', e); }
     finally { setLoading(false); }
   }, []);
 

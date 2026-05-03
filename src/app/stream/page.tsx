@@ -38,7 +38,10 @@ function Stream() {
   const sendTest = async () => {
     setTesting(true);
     try {
-      await api.donations.inject("saweria","Test Commander",1000,"IDR","Keep up the great stream! The new overlay looks insane.");
+      // Best-effort inject — show preview locally even if API fails (e.g. no active license)
+      try {
+        await api.donations.inject("saweria","Test Commander",1000,"IDR","Keep up the great stream! The new overlay looks insane.");
+      } catch (e) { console.warn('[sendTest inject]', e); }
       const fakeDonation: Donation = {
         donation_id: "preview_"+Date.now(),
         donor_name:  "Test Commander",
