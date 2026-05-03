@@ -134,6 +134,8 @@ export const api = {
       get<{ users: AdminUser[] }>("/api/admin/users"),
     deleteUser: (id: number) =>
       del<{ ok: boolean }>(`/api/admin/users/${id}`),
+    updateRole: (id: number, role: string) =>
+      put<{ ok: boolean }>(`/api/admin/users/${id}/role`, { role }),
     generateKey: (username: string, password: string, role: string, licensed_to?: string) =>
       post<{ ok: boolean; license_key: string; username: string; user_id: number }>(
         "/api/admin/generate-key",

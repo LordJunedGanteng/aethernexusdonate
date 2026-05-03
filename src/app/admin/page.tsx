@@ -272,9 +272,25 @@ function Admin() {
                     <td className="p-4 font-semibold text-primary-fixed">{u.username}</td>
                     <td className="p-4 text-on-surface-variant">{u.email??""}</td>
                     <td className="p-4">
-                      <span className={clsx("px-2 py-0.5 rounded text-[9px] font-bold uppercase",roleBadge(u.role??"standard"))}>
-                        {u.role??"standard"}
-                      </span>
+                      <select
+                        value={u.role??"standard"}
+                        onChange={async e=>{
+                          const newRole = e.target.value;
+                          try {
+                            await api.admin.updateRole(u.id, newRole);
+                            setUsers(prev => prev.map(x => x.id===u.id ? {...x,role:newRole} : x));
+                          } catch(err:any){ alert(err.message); }
+                        }}
+                        className={clsx(
+                          "px-2 py-0.5 rounded text-[9px] font-bold uppercase cursor-pointer border-0 outline-none appearance-none",
+                          roleBadge(u.role??"standard")
+                        )}
+                        style={G}
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="premium">Premium</option>
+                        <option value="admin">Admin</option>
+                      </select>
                     </td>
                     <td className="p-4">
                       <span className="flex items-center gap-1">
