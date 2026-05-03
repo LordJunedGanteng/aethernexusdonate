@@ -14,9 +14,15 @@ function Admin() {
   const [logs,    setLogs]    = useState<any[]>([]);
   const [search,  setSearch]  = useState("");
   const [loading, setLoading] = useState(true);
-  const [form,    setForm]    = useState({ username:"", role:"standard", game_name:"" });
-  const [genResult, setGenResult] = useState<{license_key:string}|null>(null);
-  const [saving, setSaving]   = useState(false);
+  const [form, setForm] = useState({
+    username:    "",
+    password:    "",
+    role:        "standard",
+    licensed_to: "",
+  });
+  const [showPw, setShowPw] = useState(false);
+  const [genResult, setGenResult] = useState<{license_key:string; username:string}|null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(()=>{
     Promise.allSettled([
@@ -28,17 +34,17 @@ function Admin() {
     }).finally(()=>setLoading(false));
   },[]);
 
-  const generate = async()=>{
-    if(!form.username.trim())return;
+  const generate = async () => {
+    if (!form.username.trim() || !form.password.trim()) return;
     setSaving(true);
-    try{
-      const r = await api.admin.generateKey(form.username, form.game_name);
+    try {
+      const r = await api.admin.generateKey(form.username, form.password, form.role, form.licensed_to);
       setGenResult(r as any);
-      // reload users
+      setForm({ username: "", password: "", role: "standard", licensed_to: "" });
       const ru = await api.admin.listUsers();
-      setUsers((ru as any).users??[]);
-    }catch(e:any){ alert(e.message); }
-    finally{ setSaving(false); }
+      setUsers((ru as any).users ?? []);
+    } catch (e: any) { alert(e.message); }
+    finally { setSaving(false); }
   };
 
   const filtered = users.filter(u =>
@@ -106,33 +112,64 @@ function Admin() {
           </div>
 
           <div className="space-y-4">
+            {/* Username */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Target Username</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Username</label>
               <input
                 value={form.username}
                 onChange={e=>setForm({...form,username:e.target.value})}
                 placeholder="e.g. streamer_01"
-                className="bg-surface-container-high border border-outline-variant rounded px-3 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all"
+                className="bg-surface-container-high border border-outline-variant rounded px-3 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all font-mono"
               />
             </div>
+
+            {/* Password */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Access Role</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Password</label>
               <div className="relative">
-                <select value={form.role} onChange={e=>setForm({...form,role:e.target.value})}
-                  className="w-full bg-surface-container-high border border-outline-variant rounded px-3 py-2.5 text-sm text-on-surface appearance-none outline-none focus:border-primary-fixed transition-all cursor-pointer">
-                  <option value="standard">Standard Tier</option>
-                  <option value="premium">Premium Tier</option>
-                  <option value="admin">Admin / Unrestricted</option>
-                </select>
-                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none text-[16px]">expand_more</span>
+                <input
+                  type={showPw ? "text" : "password"}
+                  value={form.password}
+                  onChange={e=>setForm({...form,password:e.target.value})}
+                  placeholder="Set user password"
+                  className="w-full bg-surface-container-high border border-outline-variant rounded px-3 pr-9 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all font-mono"
+                />
+                <button type="button" onClick={()=>setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant hover:text-primary transition-colors">
+                  <span className="material-symbols-outlined text-[16px]">{showPw?"visibility_off":"visibility"}</span>
+                </button>
               </div>
             </div>
+
+            {/* Role */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Designated Game</label>
+              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Access Role</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { val:"standard", label:"Trial", sub:"5 Days",   color:"border-primary-fixed text-primary-fixed" },
+                  { val:"premium",  label:"Lifetime", sub:"∞",      color:"border-secondary text-secondary" },
+                  { val:"admin",    label:"Admin",    sub:"Full",   color:"border-primary text-primary" },
+                ].map(({val,label,sub,color})=>(
+                  <button key={val} type="button"
+                    onClick={()=>setForm({...form,role:val})}
+                    className={clsx(
+                      "flex flex-col items-center py-2.5 rounded border-2 transition-all text-center",
+                      form.role===val ? `${color} bg-surface-container-highest` : "border-outline-variant text-on-surface-variant hover:border-outline"
+                    )} style={G}>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>
+                    <span className="text-[9px] font-mono opacity-70">{sub}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Licensed To */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant" style={G}>Licensed To</label>
               <input
-                value={form.game_name}
-                onChange={e=>setForm({...form,game_name:e.target.value})}
-                placeholder="Nexus Protocol v2"
+                value={form.licensed_to}
+                onChange={e=>setForm({...form,licensed_to:e.target.value})}
+                placeholder="e.g. Nexus Protocol, John's Game"
                 className="bg-surface-container-high border border-outline-variant rounded px-3 py-2.5 text-sm text-on-surface placeholder:text-outline outline-none focus:border-primary-fixed focus:shadow-[0_0_8px_rgba(200,233,236,0.15)] transition-all"
               />
             </div>
@@ -140,21 +177,27 @@ function Admin() {
 
           <button
             onClick={generate}
-            disabled={saving||!form.username.trim()}
+            disabled={saving || !form.username.trim() || !form.password.trim()}
             className="mt-2 bg-primary text-on-primary text-[10px] font-bold uppercase py-3 rounded hover:bg-primary-fixed hover:shadow-[0_0_15px_rgba(200,233,236,0.4)] transition-all flex items-center justify-center gap-2 group disabled:opacity-40"
             style={G}>
             {saving
-              ? <><span className="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>Generating…</>
-              : <><span className="material-symbols-outlined text-[15px] group-hover:rotate-90 transition-transform">bolt</span>Generate License</>
+              ? <><span className="material-symbols-outlined text-[15px] animate-spin">progress_activity</span>Creating Account…</>
+              : <><span className="material-symbols-outlined text-[15px] group-hover:rotate-90 transition-transform">person_add</span>Create Account & License</>
             }
           </button>
 
           {/* Success result */}
           {genResult && (
-            <div className="bg-surface-container-high border border-primary-fixed rounded p-3 flex items-center justify-between group cursor-pointer hover:border-primary transition-colors"
-              onClick={()=>navigator.clipboard.writeText(genResult.license_key)}>
-              <code className="font-mono text-secondary-fixed text-xs tracking-wider">{genResult.license_key}</code>
-              <span className="material-symbols-outlined text-[14px] text-outline-variant group-hover:text-primary-fixed transition-colors">content_copy</span>
+            <div className="bg-surface-container-high border border-primary-fixed/50 rounded p-3 space-y-2">
+              <div className="flex items-center gap-2 text-[10px] text-primary-fixed font-bold uppercase" style={G}>
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Account Created — {genResult.username}
+              </div>
+              <div className="flex items-center justify-between group cursor-pointer hover:bg-surface-container-highest rounded px-2 py-1 transition-colors"
+                onClick={()=>navigator.clipboard.writeText(genResult.license_key)}>
+                <code className="font-mono text-secondary-fixed text-xs tracking-wider">{genResult.license_key}</code>
+                <span className="material-symbols-outlined text-[14px] text-outline-variant group-hover:text-primary-fixed transition-colors">content_copy</span>
+              </div>
             </div>
           )}
         </div>

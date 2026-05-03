@@ -134,8 +134,11 @@ export const api = {
       get<{ users: AdminUser[] }>("/api/admin/users"),
     deleteUser: (id: number) =>
       del<{ ok: boolean }>(`/api/admin/users/${id}`),
-    generateKey: (username: string, game_name?: string) =>
-      post<{ license_key: string }>("/api/admin/generate-key", { username, game_name }),
+    generateKey: (username: string, password: string, role: string, licensed_to?: string) =>
+      post<{ ok: boolean; license_key: string; username: string; user_id: number }>(
+        "/api/admin/generate-key",
+        { username, password, role, licensed_to },
+      ),
     getLogs: () =>
       get<any>("/api/admin/logs"),
     // Legacy alias
