@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { api, type RobloxGameInfo, WORKER_URL } from '@/lib/api';
 import AuthGate from '@/components/AuthGate';
 import clsx from 'clsx';
 
@@ -23,6 +23,9 @@ function Admin() {
   });
   const [showPw, setShowPw] = useState(false);
   const [genResult, setGenResult] = useState<{license_key:string; username:string}|null>(null);
+  const [gamePreview, setGamePreview] = useState<RobloxGameInfo|null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>|null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(()=>{
@@ -34,6 +37,22 @@ function Admin() {
       if(l.status==="fulfilled") setLogs((l.value as any).results??[]);
     }).finally(()=>setLoading(false));
   },[]);
+
+  // Debounced Roblox preview fetch
+  useEffect(()=>{
+    const uid = form.universe_id.trim();
+    if (!uid || uid.length < 5) { setGamePreview(null); return; }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setPreviewLoading(true);
+      try {
+        const res = await fetch(`${WORKER_URL}/api/roblox/game?universe_id=${uid}`);
+        if (res.ok) setGamePreview(await res.json());
+        else setGamePreview(null);
+      } catch { setGamePreview(null); }
+      finally { setPreviewLoading(false); }
+    }, 600);
+  },[form.universe_id]);
 
   const generate = async () => {
     if (!form.username.trim() || !form.password.trim()) return;
@@ -193,6 +212,53 @@ function Admin() {
               <p className="text-[9px] text-outline font-mono">
                 Roblox → Game → ⋯ → Copy Universe ID
               </p>
+
+              {/* Live Game Preview */}
+              {previewLoading && (
+                <div className="flex items-center gap-2 bg-surface-container-highest border border-outline-variant rounded p-3 animate-pulse">
+                  <div className="w-14 h-14 rounded bg-surface-container-high shrink-0"/>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-surface-container-high rounded w-3/4"/>
+                    <div className="h-2 bg-surface-container-high rounded w-1/2"/>
+                  </div>
+                </div>
+              )}
+              {!previewLoading && gamePreview && (
+                <div className="relative overflow-hidden bg-surface-container-highest border border-primary-fixed/30 rounded shadow-[0_0_12px_rgba(200,233,236,0.08)] flex gap-3 p-3">
+                  {/* Thumbnail */}
+                  {gamePreview.thumbnailUrl ? (
+                    <img
+                      src={gamePreview.thumbnailUrl}
+                      alt={gamePreview.name}
+                      className="w-16 h-16 rounded object-cover border border-outline-variant shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded bg-surface-container-high border border-outline-variant flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-outline text-[24px]">sports_esports</span>
+                    </div>
+                  )}
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-primary-fixed text-[11px] font-bold truncate" style={G}>{gamePreview.name}</div>
+                    <div className="text-outline-variant text-[9px] font-mono mt-0.5">by {gamePreview.creator}</div>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+                        {gamePreview.playing.toLocaleString()} playing
+                      </span>
+                      <span className="text-[9px] text-outline-variant font-mono">
+                        {(gamePreview.visits/1000).toFixed(1)}K visits
+                      </span>
+                    </div>
+                  </div>
+                  {/* Verified badge */}
+                  <div className="absolute top-2 right-2">
+                    <span className="text-[8px] font-bold uppercase tracking-wider text-primary-fixed bg-primary-fixed/10 border border-primary-fixed/30 px-1.5 py-0.5 rounded font-mono">
+                      ✓ Verified
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
